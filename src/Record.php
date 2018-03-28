@@ -20,12 +20,18 @@ class Record
     {
         return [];
     }
-    
+
     public function closed(): array
     {
         return [];
     }
 
+    public function embedded()
+    {
+        return [];
+    }
+    
+    
     public function attributes(): array
     {
         return array_keys($this->fields());
@@ -34,9 +40,25 @@ class Record
     function __construct($data = null)
     {
         if ($data !== null) {
-            $newData = (array) $data;
-            foreach ($this->fields() as $key => $value) {
-                $this->data[$key] = $newData[$key] ?? $value;
+            $this->load($data);
+        }
+    }
+
+    function load($data)
+    {
+        $embedded = $this->embedded();
+        $newData = (array) $data;
+        $fields = $this->fields();
+        foreach ($this->attributes() as $key) {
+            $default = $fields[$key] ?? null;
+            if (is_array($default)) {
+                if (isset($embedded[$key]) && count($default) == 0) {
+                    $this->data[$key] = new EmbeddedCollection($embedded[$key], !empty($newData[$key]) ? (array) $newData[$key] : [], $this);
+                } else {
+                    $this->data[$key] = new Embedded($newData[$key] ?? $default, $this);
+                }
+            } else {
+                $this->data[$key] = $newData[$key] ?? $default;
             }
         }
     }
@@ -46,14 +68,14 @@ class Record
         if (method_exists($this, 'setAttr' . $name)) {
             return $this->{'setAttr' . $name}($name, $value);
         }
-        
+
         if (in_array($name, $this->closed())) {
             return false;
         }
 
-        $attr = $this->fields();
+        $attr = $this->attributes();
 
-        if (isset($attr[$name])) {
+        if (in_array($name, $attr)) {
             $this->data[$name] = $value;
         } else {
             $this->{$name} = $value;
@@ -79,6 +101,18 @@ class Record
             return $this->data[$name];
         }
 
+        $fields = $this->fields();
+        $embedded = $this->embedded();
+
+        if (!empty($fields[$name]) && is_array($fields[$name])) {
+            if (isset($embedded[$name]) && count($fields[$name]) == 0) {
+                $this->data[$name] = new EmbeddedCollection($embedded[$name], [], $this);
+            } else {
+                $this->data[$name] = new Embedded($fields[$name], $this);
+            }
+            return $this->data[$name];
+        }
+
         return $this->fields()[$name] ?? null;
     }
 
@@ -86,11 +120,11 @@ class Record
     {
         $result = [];
         $attr = array_diff($this->attributes(), $this->hidden());
-        
+
         foreach ($attr as $key) {
-            $result[$key] = $this->{$key};
+            $result[$key] = is_object($this->{$key}) ? (array) $this->{$key} : $this->{$key};
         }
-        
+
         return $result;
     }
 
