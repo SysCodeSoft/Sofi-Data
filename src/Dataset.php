@@ -20,9 +20,11 @@ class Dataset
     
     function each()
     {
+//        reset($this->cursor);
         foreach ($this->cursor as $value) {
             yield (new $this->presenter($value));
         }
+        return true;
     }
     
 }
